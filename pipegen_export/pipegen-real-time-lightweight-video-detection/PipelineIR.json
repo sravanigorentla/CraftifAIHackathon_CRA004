@@ -1,0 +1,407 @@
+{
+  "loop": {
+    "next_file": null,
+    "next_task": null,
+    "projectTree": {},
+    "target_function": {
+      "name": "read_file",
+      "parameters": {}
+    },
+    "visited_steps": [
+      "src1/VehicleDetection/application.py",
+      "models/yolo11s.onnx"
+    ]
+  },
+  "pipeline_ir": {
+    "connections": [
+      [
+        "p01o_frame",
+        "p02i_frame"
+      ],
+      [
+        "p01o_meta",
+        "p04i_meta"
+      ],
+      [
+        "p02o_blob",
+        "p03i_blob"
+      ],
+      [
+        "p02o_geometry",
+        "p04i_geometry"
+      ],
+      [
+        "p02o_frame",
+        "p04i_frame"
+      ],
+      [
+        "p03o_raw",
+        "p04i_raw"
+      ],
+      [
+        "p04o_record",
+        "p05i_record"
+      ]
+    ],
+    "nodes": [
+      {
+        "description": "Read every video frame and emit timing metadata.",
+        "id": 1,
+        "name": "file",
+        "ports": [
+          {
+            "direction": "output",
+            "format": {
+              "color": "BGR",
+              "encoding": "raw"
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p01o_frame",
+            "tensor": {
+              "dtype": "uint8",
+              "shape": [
+                720,
+                1280,
+                3
+              ]
+            }
+          },
+          {
+            "direction": "output",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p01o_meta",
+            "tensor": {
+              "dtype": null,
+              "shape": null
+            }
+          }
+        ],
+        "pseudo_code": "import cv2\n\npath = 'pipegen-project/input_videos/sample_720p.mp4'\ncap = cv2.VideoCapture(path)\nif not cap.isOpened():\n    raise OSError(f'Cannot open video: {path}')\nfps = cap.get(cv2.CAP_PROP_FPS) or 30.0\nframe_index = 0\ntry:\n    while True:\n        ok, frame = cap.read()\n        if not ok:\n            break\n        position_ms = cap.get(cv2.CAP_PROP_POS_MSEC)\n        timestamp_s = position_ms / 1000.0 if position_ms > 0 else frame_index / fps\n        metadata = {'frame_index': frame_index, 'timestamp_s': timestamp_s}\n        yield frame, metadata\n        frame_index += 1\nfinally:\n    cap.release()",
+        "resolution": [
+          1280,
+          720
+        ],
+        "type": "input",
+        "url": "file://pipegen-project/input_videos/sample_720p.mp4"
+      },
+      {
+        "color_order": "RGB",
+        "description": "Letterbox frames, convert to RGB, and preserve geometry.",
+        "id": 2,
+        "mean": null,
+        "normalization": 0.00392156862745098,
+        "offset": null,
+        "pad_value": 114,
+        "ports": [
+          {
+            "direction": "input",
+            "format": {
+              "color": "BGR",
+              "encoding": "raw"
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p02i_frame",
+            "tensor": {
+              "dtype": "uint8",
+              "shape": [
+                720,
+                1280,
+                3
+              ]
+            }
+          },
+          {
+            "direction": "output",
+            "format": {
+              "color": "RGB",
+              "encoding": "raw"
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p02o_blob",
+            "tensor": {
+              "dtype": "fp32",
+              "shape": [
+                1,
+                3,
+                640,
+                640
+              ]
+            }
+          },
+          {
+            "direction": "output",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p02o_geometry",
+            "tensor": {
+              "dtype": null,
+              "shape": null
+            }
+          },
+          {
+            "direction": "output",
+            "format": {
+              "color": "BGR",
+              "encoding": "raw"
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p02o_frame",
+            "tensor": {
+              "dtype": "uint8",
+              "shape": [
+                720,
+                1280,
+                3
+              ]
+            }
+          }
+        ],
+        "pseudo_code": "import cv2\nimport numpy as np\n\ndef process(frame):\n    orig_h, orig_w = frame.shape[:2]\n    input_h = input_w = 640\n    ratio = min(input_h / orig_h, input_w / orig_w)\n    new_w, new_h = round(orig_w * ratio), round(orig_h * ratio)\n    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)\n    canvas = np.full((input_h, input_w, 3), 114, dtype=np.uint8)\n    pad_x, pad_y = (input_w - new_w) // 2, (input_h - new_h) // 2\n    canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized\n    blob = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0\n    blob = np.transpose(blob, (2, 0, 1))[None]\n    geometry = {'ratio': ratio, 'pad_x': pad_x, 'pad_y': pad_y, 'orig_w': orig_w, 'orig_h': orig_h}\n    return np.ascontiguousarray(blob), geometry, frame",
+        "resize": [
+          640,
+          640
+        ],
+        "resize_mode": "letterbox",
+        "scale": 0.00392156862745098,
+        "std": null,
+        "type": "preprocess"
+      },
+      {
+        "batchSize": 1,
+        "description": "Run YOLO11s on each prepared video frame.",
+        "id": 3,
+        "layout": "NCHW",
+        "model": {
+          "inputs": [
+            {
+              "dtype": "fp32",
+              "name": "images",
+              "shape": [
+                1,
+                3,
+                640,
+                640
+              ]
+            }
+          ],
+          "name": "YOLO11s COCO-80",
+          "outputs": [
+            {
+              "dtype": "fp32",
+              "name": "output0",
+              "shape": [
+                1,
+                84,
+                8400
+              ]
+            }
+          ],
+          "parameter_count": 9485791,
+          "type": "engine",
+          "url": "models/yolo11s.fp32.plan",
+          "source_onnx": "models/yolo11s.onnx"
+        },
+        "ports": [
+          {
+            "direction": "input",
+            "format": {
+              "color": "RGB",
+              "encoding": "raw"
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p03i_blob",
+            "tensor": {
+              "dtype": "fp32",
+              "shape": [
+                1,
+                3,
+                640,
+                640
+              ]
+            }
+          },
+          {
+            "direction": "output",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p03o_raw",
+            "tensor": {
+              "dtype": "fp32",
+              "shape": [
+                1,
+                84,
+                8400
+              ]
+            }
+          }
+        ],
+        "pseudo_code": "import onnxruntime as ort\n\nmodel_path = 'models/yolo11s.onnx'\nsession = ort.InferenceSession(model_path, providers=ort.get_available_providers())\ninput_name = session.get_inputs()[0].name\noutput_names = [output.name for output in session.get_outputs()]\n\ndef process(blob):\n    outputs = session.run(output_names, {input_name: blob})\n    return outputs[0]",
+        "type": "inference"
+      },
+      {
+        "description": "Decode COCO boxes and write one frame record.",
+        "id": 4,
+        "label_file_path": null,
+        "num_classes": 80,
+        "ports": [
+          {
+            "direction": "input",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p04i_raw",
+            "tensor": {
+              "dtype": "fp32",
+              "shape": [
+                1,
+                84,
+                8400
+              ]
+            }
+          },
+          {
+            "direction": "input",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p04i_geometry",
+            "tensor": {
+              "dtype": null,
+              "shape": null
+            }
+          },
+          {
+            "direction": "input",
+            "format": {
+              "color": "BGR",
+              "encoding": "raw"
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p04i_frame",
+            "tensor": {
+              "dtype": "uint8",
+              "shape": [
+                720,
+                1280,
+                3
+              ]
+            }
+          },
+          {
+            "direction": "input",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p04i_meta",
+            "tensor": {
+              "dtype": null,
+              "shape": null
+            }
+          },
+          {
+            "direction": "output",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p04o_record",
+            "tensor": {
+              "dtype": null,
+              "shape": null
+            }
+          }
+        ],
+        "pseudo_code": "import cv2\nimport numpy as np\n\nCLASS_NAMES = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush']\n\ndef process(raw, geometry, frame, metadata):\n    confidence_threshold, nms_threshold = 0.3, 0.45\n    orig_h, orig_w = frame.shape[:2]\n    if (orig_w, orig_h) != (geometry['orig_w'], geometry['orig_h']):\n        raise ValueError('Frame and letterbox geometry do not match')\n    preds = np.squeeze(raw, 0).T\n    boxes_xywh, scores = preds[:, :4], preds[:, 4:]\n    class_ids = np.argmax(scores, axis=1)\n    confidences = scores[np.arange(scores.shape[0]), class_ids]\n    keep = confidences >= confidence_threshold\n    boxes_xywh, confidences, class_ids = boxes_xywh[keep], confidences[keep], class_ids[keep]\n    detections = []\n    if len(boxes_xywh) != 0:\n        cx, cy, w, h = boxes_xywh.T\n        ratio, pad_x, pad_y = geometry['ratio'], geometry['pad_x'], geometry['pad_y']\n        x1 = np.clip((cx - w / 2 - pad_x) / ratio, 0, orig_w)\n        y1 = np.clip((cy - h / 2 - pad_y) / ratio, 0, orig_h)\n        x2 = np.clip((cx + w / 2 - pad_x) / ratio, 0, orig_w)\n        y2 = np.clip((cy + h / 2 - pad_y) / ratio, 0, orig_h)\n        for c in np.unique(class_ids):\n            idxs = np.where(class_ids == c)[0]\n            rects = np.stack([x1[idxs], y1[idxs], (x2 - x1)[idxs], (y2 - y1)[idxs]], axis=1)\n            kept = cv2.dnn.NMSBoxes(rects.tolist(), confidences[idxs].tolist(), confidence_threshold, nms_threshold)\n            keep_idx = np.array(kept).flatten() if len(kept) else []\n            for i in keep_idx:\n                oi = idxs[i]\n                class_id = int(class_ids[oi])\n                detections.append({'box': [float(x1[oi]), float(y1[oi]), float(x2[oi]), float(y2[oi])], 'score': float(confidences[oi]), 'class': class_id, 'class_name': CLASS_NAMES[class_id]})\n    return {'frame_index': metadata['frame_index'], 'timestamp_s': metadata['timestamp_s'], 'width': orig_w, 'height': orig_h, 'detections': detections}",
+        "task": "detection",
+        "threshold": 0.3,
+        "top_items": null,
+        "type": "postprocess"
+      },
+      {
+        "description": "Save per-frame detections as one valid JSON file.",
+        "grid": null,
+        "id": 5,
+        "name": "json",
+        "output_type": "single",
+        "ports": [
+          {
+            "direction": "input",
+            "format": {
+              "color": null,
+              "encoding": null
+            },
+            "framerate": {
+              "denominator": 1,
+              "numerator": 30
+            },
+            "id": "p05i_record",
+            "tensor": {
+              "dtype": null,
+              "shape": null
+            }
+          }
+        ],
+        "pseudo_code": "import json\nfrom pathlib import Path\n\npath = Path('output/metadata.json')\npath.parent.mkdir(parents=True, exist_ok=True)\nwith path.open('w', encoding='utf-8') as stream:\n    stream.write('[\\n')\n    first = True\n    for record in incoming_records:\n        if not first:\n            stream.write(',\\n')\n        json.dump(record, stream, allow_nan=False)\n        first = False\n    stream.write('\\n]\\n')",
+        "resolution": null,
+        "type": "output",
+        "url": "file://output/metadata.json"
+      }
+    ]
+  }
+}

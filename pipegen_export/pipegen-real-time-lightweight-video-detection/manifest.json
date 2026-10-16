@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "project_name": "Real-Time Lightweight Video Detection",
+  "project_id": "59dba97c-4126-47d4-b6c8-c89e1d2eb827",
+  "pipegen_version": "0.5.1",
+  "exported_at": "2026-10-16T16:01:34Z",
+  "origin": {
+    "gpu": "NVIDIA GeForce RTX 2050",
+    "trt": "10.3.0",
+    "arch": "x86_64",
+    "image": "craftifaidocker/deepstream:7.1-amd64-v3",
+    "gpu_slug": "nvidia-geforce-rtx-2050"
+  },
+  "models": [
+    {
+      "name": "yolo11s",
+      "onnx": "models/yolo11s.onnx",
+      "plan": "models/yolo11s.fp32.plan",
+      "precision": "fp32",
+      "workspace_mb": 1024,
+      "builder_optimization_level": 3,
+      "origin_builder_optimization_level": 0,
+      "onnx_sha256": "f8d06a921024c1a46091d48a59a8e377ba189f14250df167fe82f408ca37814b",
+      "plan_sha256": "a44de2fe10b7c736ce86199f5402bac297ef10e0bd6b9605d093423ee80fecbb",
+      "engine_bytes": 48709532,
+      "layer_count": 236
+    }
+  ],
+  "io": {
+    "default_input_kind": "file",
+    "default_input": "sample_720p.mp4",
+    "supported_inputs": [
+      "file",
+      "rtsp"
+    ],
+    "input_required": true,
+    "output_dir": "out",
+    "has_display_sink": false
+  },
+  "warnings": [
+    "the pipeline read sample_720p.mp4, which lives outside the project and cannot be shipped \u2014 the recipient must pass --input"
+  ]
+}
