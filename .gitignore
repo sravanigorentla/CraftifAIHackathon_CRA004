@@ -1,0 +1,10 @@
+# Temporary files
+*.tmp
+*.log
+__pycache__/
+.cache/
+
+# Keep evidence, models configs, and JSON outputs
+!evidence/output/metadata.json
+!evidence/benchmarks/*.json
+!evidence/screenshots/*.png
